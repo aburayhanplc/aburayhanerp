@@ -1,57 +1,40 @@
-# AbuRayhan Export ERP System
 
-A production-ready Enterprise Resource Planning (ERP) system designed for the logistics and financial management of AbuRayhan (Ethiopia) and Tamaam (USA).
+# AbuRayhan Export ERP - Deployment & Integration Guide
 
-## 🚀 Key Features
-- **Master Vessel Tracking:** Precise weight allocation for partners and clients.
-- **Dynamic Costing:** Proportional distribution of Driver, Store, Freight, and Postal costs.
-- **Profit Distribution:** Automatic calculation of the 50/50 profit split for primary partners.
-- **Enterprise Reporting:** Proportional cost reconciliation reports in PDF format.
+This ERP system is built for production environments with a focus on **Offline-First Resilience** and **Cloud PostgreSQL Synchronization**. To make the app live and functional, follow these steps.
 
-## 🏗 System Architecture
+## 📦 1. Database Setup (Neon PostgreSQL)
 
-### 1. Database (Neon PostgreSQL)
-- **Table:** `erp_state`
-- **Logic:** Single-row atomic state storage using JSONB for maximum flexibility and performance.
-- **Schema:**
-  ```sql
-  CREATE TABLE erp_state (
-    id TEXT PRIMARY KEY,
-    data JSONB NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
+The system uses Neon for serverless PostgreSQL.
 
-### 2. Profit Logic
-- **Partner Split:** Total Client Revenue minus Client Expenses, divided by 2.
-- **Precision:** All values are rounded to 2 decimal places to ensure accounting accuracy.
+1.  **Sign Up:** Go to [Neon.tech](https://neon.tech/) and create a free account.
+2.  **Create Project:** Create a new project (e.g., `aburayhan-erp`).
+3.  **Get Connection String:** Copy your **Database Connection String** (HTTP variant). It looks like this:
+    `postgresql://[USER]:[PASSWORD]@[HOST]/neondb?sslmode=require`
 
----
+## 🚀 2. Netlify Deployment
 
-## 🛠 Step-by-Step Deployment Guide
+Netlify hosts the frontend and the bridge functions.
 
-### Step 1: Push Code to GitHub
-1. Create a repository on GitHub.
-2. Commit and push all files to the `main` branch.
+1.  **Connect Repo:** Link your GitHub repository to Netlify.
+2.  **Environment Variables:** 
+    - Go to **Site Settings > Environment Variables**.
+    - Add a new variable: `DATABASE_URL`.
+    - Paste your Neon connection string as the value.
+3.  **Deploy Site:** Trigger a production deploy. Netlify will automatically detect the serverless functions in `netlify/functions/api.ts`.
 
-### Step 2: Database Setup (Neon.tech)
-1. Sign up at [Neon.tech](https://neon.tech/).
-2. Create a project and database.
-3. Copy the **Connection String** (e.g., `postgresql://user:pass@ep-cool-name.aws.neon.tech/neondb`).
+## 🛠 3. Technical Verification
 
-### Step 3: Netlify Hosting
-1. Import your GitHub repo into [Netlify](https://netlify.com/).
-2. Go to **Site Settings > Environment Variables**.
-3. Create a variable named `DATABASE_URL` and paste the Neon string.
-4. The backend function in `netlify/functions/api.ts` will automatically initialize your tables.
+Once deployed, access your URL and check the following:
 
-### Step 4: Access Your Site
-Visit your Netlify URL. The sidebar will indicate a **"Live Connection"** (Green dot) once the database is successfully linked.
+- **Connection Status:** Look at the sidebar (Desktop) or Header (Mobile). A **Green Dot** (🟢 Live) means the app has successfully communicated with Neon and initialized the `erp_state` table.
+- **Data Persistence:** Try adding a Shipment. If you refresh the page or lose internet, the data remains in `localStorage` and attempts to sync to the cloud automatically in the background.
+
+## ⚖️ 4. Calculation Logic Reference
+
+- **Shared Costs:** (Driver Total + Store Total) / Total Batch Weight = Rate per KG.
+- **Net Profit:** (Client Weight * Service Fee) - (Client Share of Driver/Store + Postal Costs).
+- **Partner Split:** The primary partners split the **Net Profit** 50/50.
 
 ---
-
-## 📅 Future Maintenance
-- **Local Backup:** Data is mirrored in Browser LocalStorage.
-- **Performance:** Neon's HTTP driver handles high-frequency writes during batch arrivals effortlessly.
-
-**AbuRayhan Export Logistics Excellence.**
+**Logistics Excellence for AbuRayhan Export.**

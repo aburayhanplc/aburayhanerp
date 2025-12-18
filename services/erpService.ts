@@ -17,49 +17,51 @@ export const round = (num: number): number => {
 };
 
 export const calculateBatchFinancials = (
-  batch: Partial<ArrivalBatch>,
+  batchInputs: Partial<ArrivalBatch>,
   items: ArrivalItem[]
 ): ArrivalBatch => {
-  const driverCost = round(safeNum(batch.driverCost));
-  const storeCost = round(safeNum(batch.storeCost));
-  const freightCost = round(safeNum(batch.freightCost));
-  const postalCost = round(safeNum(batch.postalCost));
+  // 1. Sanitize Inputs
+  const driverCostTotal = round(safeNum(batchInputs.driverCostTotal));
+  const storeCostTotal = round(safeNum(batchInputs.storeCostTotal));
+  const freightRatePerKg = round(safeNum(batchInputs.freightRatePerKg));
+  const postalCostTotal = round(safeNum(batchInputs.postalCostTotal));
 
-  const totalPartnerKg = round(items
-    .filter((i) => i.ownerType === 'Partner')
-    .reduce((sum, i) => sum + safeNum(i.arrivedKg), 0));
+  const partnerItems = items.filter(i => i.ownerType === 'Partner');
+  const clientItems = items.filter(i => i.ownerType === 'Client');
 
-  const totalClientKg = round(items
-    .filter((i) => i.ownerType === 'Client')
-    .reduce((sum, i) => sum + safeNum(i.arrivedKg), 0));
+  const totalPartnerKg = round(partnerItems.reduce((sum, i) => sum + safeNum(i.arrivedKg), 0));
+  const totalClientKg = round(clientItems.reduce((sum, i) => sum + safeNum(i.arrivedKg), 0));
+  const totalArrivedKg = round(totalPartnerKg + totalClientKg);
 
-  // Partner per-KG cost: (Driver + Store + Freight) / total partner KG
-  const partnerPerKgCost = totalPartnerKg > 0 
-    ? round((driverCost + storeCost + freightCost) / totalPartnerKg)
-    : 0;
+  // 2. Shared Costs (Driver & Store) - Distributed by total weight
+  const driverPerKg = totalArrivedKg > 0 ? driverCostTotal / totalArrivedKg : 0;
+  const storePerKg = totalArrivedKg > 0 ? storeCostTotal / totalArrivedKg : 0;
+  const sharedRatePerKg = driverPerKg + storePerKg;
 
-  // Client per-KG cost: (Driver + Store + Postal) / total client KG
-  const clientPerKgCost = totalClientKg > 0 
-    ? round((driverCost + storeCost + postalCost) / totalClientKg)
-    : 0;
+  // 3. Partner Calculations
+  const partnerSharedCost = round(totalPartnerKg * sharedRatePerKg);
+  const partnerFreightCost = round(totalPartnerKg * freightRatePerKg);
+  const partnerTotalLogistics = round(partnerSharedCost + partnerFreightCost);
 
-  // Revenue = Arrived KG × service fee per KG
-  const totalClientRevenue = round(items
-    .filter((i) => i.ownerType === 'Client')
-    .reduce((sum, i) => sum + (safeNum(i.arrivedKg) * safeNum(i.serviceFeePerKg)), 0));
+  // 4. Client Calculations
+  const clientSharedCost = round(totalClientKg * sharedRatePerKg);
+  const clientPostalCost = round(totalClientKg > 0 ? postalCostTotal : 0); // Postal applies total to clients
+  const clientTotalCost = round(clientSharedCost + clientPostalCost);
 
-  // Client Costs = Arrived KG × clientPerKgCost
-  const totalClientCosts = round(totalClientKg * clientPerKgCost);
+  // 5. Revenue & Profit
+  const totalClientRevenue = round(clientItems.reduce((sum, i) => 
+    sum + (safeNum(i.arrivedKg) * safeNum(i.serviceFeePerKg)), 0
+  ));
 
-  // Net profit = total client revenue − total client costs
-  const netProfit = round(totalClientRevenue - totalClientCosts);
+  // Net Profit = Client Revenue - Client Total Cost (shared + postal)
+  const netProfit = round(totalClientRevenue - clientTotalCost);
 
   return {
-    ...batch,
-    driverCost,
-    storeCost,
-    freightCost,
-    postalCost,
+    ...batchInputs,
+    driverCostTotal,
+    storeCostTotal,
+    freightRatePerKg,
+    postalCostTotal,
     items: items.map(i => ({
       ...i,
       arrivedKg: round(safeNum(i.arrivedKg)),
@@ -67,10 +69,14 @@ export const calculateBatchFinancials = (
     })),
     totalPartnerKg,
     totalClientKg,
-    partnerPerKgCost,
-    clientPerKgCost,
+    totalArrivedKg,
+    partnerSharedCost,
+    partnerFreightCost,
+    partnerTotalLogistics,
+    clientSharedCost,
+    clientPostalCost,
+    clientTotalCost,
     totalClientRevenue,
-    totalClientCosts,
     netProfit,
   } as ArrivalBatch;
 };

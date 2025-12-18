@@ -21,18 +21,25 @@ export interface ArrivalBatch {
   id: string;
   masterShipmentId: string;
   batchDate: string;
-  driverCost: number;
-  storeCost: number;
-  freightCost: number; // Partners only
-  postalCost: number;  // Clients only
+  driverCostTotal: number;
+  storeCostTotal: number;
+  freightRatePerKg: number; // Partners only, per KG
+  postalCostTotal: number;  // Clients only, total amount
   items: ArrivalItem[];
-  // Calculated fields
+  // Calculated fields for reporting
   totalPartnerKg: number;
   totalClientKg: number;
-  partnerPerKgCost: number;
-  clientPerKgCost: number;
+  totalArrivedKg: number;
+  
+  partnerSharedCost: number;
+  partnerFreightCost: number;
+  partnerTotalLogistics: number;
+  
+  clientSharedCost: number;
+  clientPostalCost: number;
+  clientTotalCost: number;
+  
   totalClientRevenue: number;
-  totalClientCosts: number;
   netProfit: number;
 }
 
@@ -44,7 +51,7 @@ export interface MasterShipment {
   totalPlannedKg: number;
   items: ShipmentItem[];
   batches: ArrivalBatch[];
-  isArchived?: boolean; // New property
+  isArchived?: boolean;
 }
 
 export interface FinancialSummary {

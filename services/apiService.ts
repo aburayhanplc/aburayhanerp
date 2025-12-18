@@ -1,16 +1,17 @@
 
 import { MasterShipment } from '../types';
 
-const LOCAL_STORAGE_KEY = 'aburayhan_erp_data';
-// Base URL for Netlify Functions
-const API_BASE = '/.netlify/functions/api';
+const LOCAL_STORAGE_KEY = 'aburayhan_erp_state_v2';
+const API_BASE = '/api';
+
+export type SyncStatus = 'Live' | 'Offline' | 'Error';
 
 export const apiService = {
   /**
-   * Loads shipments from Neon DB via Netlify Functions.
-   * Falls back to LocalStorage if the DB is unreachable.
+   * Loads the authoritative state. 
+   * Priority: Cloud -> Local Storage -> Empty Array
    */
-  getShipments: async (): Promise<MasterShipment[]> => {
+  getShipments: async (): Promise<{ data: MasterShipment[], status: SyncStatus }> => {
     try {
       const response = await fetch(`${API_BASE}/shipments`, {
         method: 'GET',
@@ -19,51 +20,52 @@ export const apiService = {
       
       if (response.ok) {
         const data = await response.json();
-        // Update local backup whenever we successfully fetch from cloud
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
-        return data;
+        if (Array.isArray(data)) {
+          // Sync successful: Update local cache
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+          return { data, status: 'Live' };
+        }
       }
+      console.warn("API returned non-OK status. Falling back to local.");
     } catch (e) {
-      console.warn("Neon API unreachable. Loading from local backup.");
+      console.warn("Cloud unreachable. Entering Local Mode.");
     }
 
+    // Fallback to local storage
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
+    const data = saved ? JSON.parse(saved) : [];
+    return { data, status: 'Offline' };
   },
 
   /**
-   * Atomically saves the current state to the Neon Database.
+   * Persists state locally first, then attempts background cloud sync.
    */
-  saveShipments: async (shipments: MasterShipment[]): Promise<boolean> => {
-    // 1. Immediate local backup
+  saveShipments: async (shipments: MasterShipment[]): Promise<SyncStatus> => {
+    // 1. Immediate local persistence (Safety First)
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(shipments));
 
-    // 2. Sync to Cloud
+    // 2. Attempt Cloud Sync
     try {
       const response = await fetch(`${API_BASE}/shipments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(shipments)
       });
-      return response.ok;
+      
+      if (response.ok) {
+        return 'Live';
+      }
+      return 'Error';
     } catch (e) {
-      console.error("Cloud sync failed. Data is currently saved locally.");
-      return false;
+      return 'Offline';
     }
   },
 
-  /**
-   * Checks the health of the connection to the Neon Database.
-   */
   checkConnection: async (): Promise<boolean> => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
-      
-      const res = await fetch(`${API_BASE}/health`, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const res = await fetch(`${API_BASE}/health`, { method: 'GET' });
       return res.ok;
-    } catch {
+    } catch (e) {
       return false;
     }
   }

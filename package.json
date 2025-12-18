@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@netlify/neon": "^0.1.0",
+    "@netlify/neon": "^0.1.2",
     "lucide-react": "^0.561.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
